@@ -3,14 +3,33 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"os/exec"
+
+	"github.com/cstrahan/go-watchman/bser"
 )
 
-func Query(root string) []Result {
+func Command(watchmanPath string, cmd interface{}) (interface{}, error) {
+	sockname, err := GetSockName(watchmanPath)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := net.Dial("unix", sockname)
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := bser.Decode(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	return val, nil
 }
 
-func GetSockName() (string, error) {
-	cmd := exec.Command("watchman", "get-sockname")
+func GetSockName(watchmanPath string) (string, error) {
+	cmd := exec.Command(watchmanPath, "get-sockname")
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", err
@@ -38,6 +57,10 @@ func GetSockName() (string, error) {
 
 func getError(obj interface{}) error {
 	m, ok := obj.(map[string]interface{})
+	if !ok {
+		errors.New("expected json object")
+	}
+
 	err := m["error"]
 	if err != nil {
 		return errors.New(err.(string))
