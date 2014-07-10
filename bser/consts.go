@@ -25,7 +25,7 @@ const (
 	int64Size   = int(unsafe.Sizeof(int64(0)))
 	float64Size = int(unsafe.Sizeof(float64(0)))
 
-	binaryMarkerSize = int(unsafe.Sizeof(binaryMarker))
+	binaryMarkerSize = int8Size * 2
 	sniffBufferSize  = binaryMarkerSize + int8Size
 	peekBufferSize   = sniffBufferSize + int64Size
 )

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net"
@@ -20,6 +21,13 @@ func Command(watchmanPath string, cmd interface{}) (interface{}, error) {
 		return nil, err
 	}
 
+	encoded, err := bser.Encode(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	conn.Write(encoded)
+
 	val, err := bser.Decode(conn)
 	if err != nil {
 		return nil, err
@@ -30,18 +38,16 @@ func Command(watchmanPath string, cmd interface{}) (interface{}, error) {
 
 func GetSockName(watchmanPath string) (string, error) {
 	cmd := exec.Command(watchmanPath, "get-sockname")
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", err
-	}
+	buffer := &bytes.Buffer{}
+	cmd.Stdout = buffer
 
 	if err := cmd.Run(); err != nil {
 		return "", err
 	}
 
-	d := json.NewDecoder(out)
+	d := json.NewDecoder(buffer)
 	var obj interface{}
-	err = d.Decode(&obj)
+	err := d.Decode(&obj)
 	if err != nil {
 		return "", err
 	}

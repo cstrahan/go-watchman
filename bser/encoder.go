@@ -6,8 +6,10 @@ import (
 )
 
 func Encode(o interface{}) ([]uint8, error) {
-	buffer := []uint8{0, 1, 0}
+	buffer := []uint8{0, 1, int64Marker, 0, 0, 0, 0, 0, 0, 0, 0}
 	buffer, err := encodeInterface(o, buffer)
+	pduSize := int64(len(buffer)) - 11 // header
+	*(*int64)(unsafe.Pointer(&buffer[3])) = pduSize
 
 	return buffer, err
 }
@@ -15,8 +17,6 @@ func Encode(o interface{}) ([]uint8, error) {
 func encodeInterface(o interface{}, buffer []uint8) ([]uint8, error) {
 	var err error
 	switch obj := o.(type) {
-	case string:
-		buffer, err = encodeString(obj, buffer)
 	case int:
 		buffer, err = encodeInt(int64(obj), buffer)
 	case float64:
@@ -25,6 +25,8 @@ func encodeInterface(o interface{}, buffer []uint8) ([]uint8, error) {
 		buffer, err = encodeMap(obj, buffer)
 	case []interface{}:
 		buffer, err = encodeArray(obj, buffer)
+	case string:
+		buffer, err = encodeString(obj, buffer)
 	default:
 		buffer, err = nil, errors.New("unsupported type")
 	}
@@ -33,18 +35,20 @@ func encodeInterface(o interface{}, buffer []uint8) ([]uint8, error) {
 }
 
 func encodeString(str string, buffer []uint8) ([]uint8, error) {
+	buffer = append(buffer, []uint8{stringMarker}...)
+	buffer, _ = encodeInt(int64(len(str)), buffer)
 	return append(buffer, str...), nil
 }
 
 func encodeInt(i int64, buffer []uint8) ([]uint8, error) {
-	tmp := []uint8{int64Marker, 0, 0, 0, 0}
+	tmp := []uint8{int64Marker, 0, 0, 0, 0, 0, 0, 0, 0}
 	*(*int64)(unsafe.Pointer(&tmp[1])) = i
 	buffer = append(buffer, tmp...)
 	return buffer, nil
 }
 
 func encodeFloat(f float64, buffer []uint8) ([]uint8, error) {
-	tmp := []uint8{floatMarker, 0, 0, 0, 0}
+	tmp := []uint8{floatMarker, 0, 0, 0, 0, 0, 0, 0, 0}
 	*(*float64)(unsafe.Pointer(&tmp[1])) = f
 	buffer = append(buffer, tmp...)
 	return buffer, nil

@@ -7,7 +7,7 @@ import (
 )
 
 func Decode(r io.Reader) (interface{}, error) {
-	peek := make([]uint8, 0, peekBufferSize)
+	peek := make([]uint8, peekBufferSize)
 
 	received, err := r.Read(peek[0:sniffBufferSize])
 	if err != nil {
@@ -30,12 +30,12 @@ func Decode(r io.Reader) (interface{}, error) {
 		return nil, errors.New("failed to peek at PDU header")
 	}
 
-	pduSize, _, err := decodeInt(peek)
+	pduSize, _, err := decodeInt(peek[binaryMarkerSize:])
 	if err != nil {
 		return nil, err
 	}
 
-	buffer := make([]uint8, pduSize)
+	buffer := make([]uint8, int(pduSize))
 	received, err = r.Read(buffer)
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func decodeString(buffer []uint8) (string, []uint8, error) {
 		return "", nil, errors.New("not a string")
 	}
 
-	size, buffer, err := decodeInt(buffer)
+	size, buffer, err := decodeInt(buffer[1:])
 	if err != nil {
 		return "", nil, err
 	}
@@ -133,19 +133,6 @@ func decodeFloat(buffer []uint8) (float64, []uint8, error) {
 	return num, buffer[int8Size+float64Size:], nil
 }
 
-func decodeArrayHeader(buffer []uint8) (int64, []uint8, error) {
-	if len(buffer) < int8Size {
-		return 0, nil, errors.New("unexpected end of input")
-	}
-
-	if buffer[0] != arrayMarker {
-		return 0, nil, errors.New("not an array")
-	}
-
-	size, buffer, err := decodeInt(buffer[1:])
-	return size, buffer, err
-}
-
 func decodeMap(buffer []uint8) (map[string]interface{}, []uint8, error) {
 	if len(buffer) < int8Size {
 		return nil, nil, errors.New("unexpected end of input")
@@ -162,12 +149,14 @@ func decodeMap(buffer []uint8) (map[string]interface{}, []uint8, error) {
 
 	decodedMap := make(map[string]interface{}, 0)
 	for i := 0; i < int(count); i++ {
-		str, buffer, err := decodeString(buffer)
+		var str string
+		str, buffer, err = decodeString(buffer)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		val, buffer, err := decodeInterface(buffer)
+		var val interface{}
+		val, buffer, err = decodeInterface(buffer)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -190,7 +179,7 @@ func decodeTemplate(buffer []uint8) ([]interface{}, []uint8, error) {
 	}
 
 	var headerItemsCount int64
-	headerItemsCount, buffer, err = decodeArrayHeader(buffer)
+	headerItemsCount, buffer, err = decodeArrayHeader(buffer[1:])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -237,13 +226,25 @@ func decodeTemplate(buffer []uint8) ([]interface{}, []uint8, error) {
 	return rows, buffer, nil
 }
 
+func decodeArrayHeader(buffer []uint8) (int64, []uint8, error) {
+	if len(buffer) < int8Size {
+		return 0, nil, errors.New("unexpected end of input")
+	}
+
+	if buffer[0] != arrayMarker {
+		return 0, nil, errors.New("not an array")
+	}
+
+	size, xbuffer, err := decodeInt(buffer[1:])
+	return size, xbuffer, err
+}
+
 func decodeArray(buffer []uint8) ([]interface{}, []uint8, error) {
 	size, buffer, err := decodeArrayHeader(buffer)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	buffer = buffer[1:]
 	array := make([]interface{}, size)
 	for i := range array {
 		var val interface{}
@@ -282,14 +283,14 @@ func decodeInt(buffer []uint8) (int64, []uint8, error) {
 		num := *(*int16)(unsafe.Pointer(&buffer[1]))
 		val = int64(num)
 	case int32Marker:
-		offset += int8Size
+		offset += int32Size
 		if bufferLen < offset {
 			return 0, nil, errors.New("overrun extracting int32")
 		}
 		num := *(*int32)(unsafe.Pointer(&buffer[1]))
 		val = int64(num)
 	case int64Marker:
-		offset += int8Size
+		offset += int64Size
 		if bufferLen < offset {
 			return 0, nil, errors.New("overrun extracting int64")
 		}
