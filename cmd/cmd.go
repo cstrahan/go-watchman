@@ -58,7 +58,7 @@ func GetSockName(watchmanPath string) (string, error) {
 func getError(obj interface{}) error {
 	m, ok := obj.(map[string]interface{})
 	if !ok {
-		errors.New("expected json object")
+		return errors.New("expected json object")
 	}
 
 	err := m["error"]
