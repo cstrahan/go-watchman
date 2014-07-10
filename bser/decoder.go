@@ -14,6 +14,90 @@ func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{r: r}
 }
 
+func (dec *Decoder) Decode() (interface{}, error) {
+	peek := make([]uint8, 0, peekBufferSize)
+
+	received, err := dec.r.Read(peek[0:sniffBufferSize])
+	if err != nil {
+		return nil, err
+	} else if received != sniffBufferSize {
+		return nil, errors.New("failed to sniff PDU header")
+	}
+
+	sizes := []int{0, 0, 0, 1, 2, 4, 8}
+	sizesIdx := peek[binaryMarkerSize]
+	if sizesIdx < int8Marker || sizesIdx > int64Marker {
+		return nil, errors.New("bad PDU size marker")
+	}
+	sizeMarkerSize := sizes[sizesIdx]
+
+	received, err = dec.r.Read(peek[sniffBufferSize : sniffBufferSize+sizeMarkerSize])
+	if err != nil {
+		return nil, err
+	} else if received != sizeMarkerSize {
+		return nil, errors.New("failed to peek at PDU header")
+	}
+
+	pduSize, _, err := decodeInt(peek)
+	if err != nil {
+		return nil, err
+	}
+
+	buffer := make([]uint8, pduSize)
+	received, err = dec.r.Read(buffer)
+	if err != nil {
+		return nil, err
+	} else if received != int(pduSize) {
+		return nil, errors.New("failed to load PDU")
+	}
+
+	val, _, err := decodeInterface(buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	return val, nil
+}
+
+func decodeInterface(buffer []uint8) (interface{}, []uint8, error) {
+	if len(buffer) < int8Size {
+		return 0, nil, errors.New("unexpected end of input")
+	}
+
+	switch buffer[0] {
+	case arrayMarker:
+		return decodeArray(buffer)
+	case mapMarker:
+		return decodeMap(buffer)
+	case stringMarker:
+		return decodeString(buffer)
+	case int8Marker:
+		num, buffer, err := decodeInt(buffer)
+		return float64(num), buffer, err
+	case int16Marker:
+		num, buffer, err := decodeInt(buffer)
+		return float64(num), buffer, err
+	case int32Marker:
+		num, buffer, err := decodeInt(buffer)
+		return float64(num), buffer, err
+	case int64Marker:
+		num, buffer, err := decodeInt(buffer)
+		return float64(num), buffer, err
+	case floatMarker:
+		return decodeFloat(buffer)
+	case trueVal:
+		return true, buffer[1:], nil
+	case falseVal:
+		return false, buffer[1:], nil
+	case nilVal:
+		return nil, buffer[1:], nil
+	case templateMarker:
+		return decodeTemplate(buffer)
+	default:
+		return nil, nil, errors.New("unsupported type")
+	}
+}
+
 func decodeString(buffer []uint8) (string, []uint8, error) {
 	if len(buffer) < int8Size {
 		return "", nil, errors.New("unexpected end of input")
@@ -224,88 +308,4 @@ func decodeInt(buffer []uint8) (int64, []uint8, error) {
 	}
 
 	return val, buffer[offset:], nil
-}
-
-func decodeInterface(buffer []uint8) (interface{}, []uint8, error) {
-	if len(buffer) < int8Size {
-		return 0, nil, errors.New("unexpected end of input")
-	}
-
-	switch buffer[0] {
-	case arrayMarker:
-		return decodeArray(buffer)
-	case mapMarker:
-		return decodeMap(buffer)
-	case stringMarker:
-		return decodeString(buffer)
-	case int8Marker:
-		num, buffer, err := decodeInt(buffer)
-		return float64(num), buffer, err
-	case int16Marker:
-		num, buffer, err := decodeInt(buffer)
-		return float64(num), buffer, err
-	case int32Marker:
-		num, buffer, err := decodeInt(buffer)
-		return float64(num), buffer, err
-	case int64Marker:
-		num, buffer, err := decodeInt(buffer)
-		return float64(num), buffer, err
-	case floatMarker:
-		return decodeFloat(buffer)
-	case trueVal:
-		return true, buffer[1:], nil
-	case falseVal:
-		return false, buffer[1:], nil
-	case nilVal:
-		return nil, buffer[1:], nil
-	case templateMarker:
-		return decodeTemplate(buffer)
-	default:
-		return nil, nil, errors.New("unsupported type")
-	}
-}
-
-func (dec *Decoder) Decode() (interface{}, error) {
-	peek := make([]uint8, 0, peekBufferSize)
-
-	received, err := dec.r.Read(peek[0:sniffBufferSize])
-	if err != nil {
-		return nil, err
-	} else if received != sniffBufferSize {
-		return nil, errors.New("failed to sniff PDU header")
-	}
-
-	sizes := []int{0, 0, 0, 1, 2, 4, 8}
-	sizesIdx := peek[binaryMarkerSize]
-	if sizesIdx < int8Marker || sizesIdx > int64Marker {
-		return nil, errors.New("bad PDU size marker")
-	}
-	sizeMarkerSize := sizes[sizesIdx]
-
-	received, err = dec.r.Read(peek[sniffBufferSize : sniffBufferSize+sizeMarkerSize])
-	if err != nil {
-		return nil, err
-	} else if received != sizeMarkerSize {
-		return nil, errors.New("failed to peek at PDU header")
-	}
-
-	pduSize, _, err := decodeInt(peek)
-	if err != nil {
-		return nil, err
-	}
-
-	buffer := make([]uint8, pduSize)
-	received, err = dec.r.Read(buffer)
-	if err != nil {
-		return nil, err
-	} else if received != int(pduSize) {
-		return nil, errors.New("failed to load PDU")
-	}
-
-	val, _, err := decodeInterface(buffer)
-	if err != nil {
-		return nil, err
-	}
-
-	return val, nil
 }
