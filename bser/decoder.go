@@ -6,18 +6,10 @@ import (
 	"unsafe"
 )
 
-type Decoder struct {
-	r io.Reader
-}
-
-func NewDecoder(r io.Reader) *Decoder {
-	return &Decoder{r: r}
-}
-
-func (dec *Decoder) Decode() (interface{}, error) {
+func Decode(r io.Reader) (interface{}, error) {
 	peek := make([]uint8, 0, peekBufferSize)
 
-	received, err := dec.r.Read(peek[0:sniffBufferSize])
+	received, err := r.Read(peek[0:sniffBufferSize])
 	if err != nil {
 		return nil, err
 	} else if received != sniffBufferSize {
@@ -31,7 +23,7 @@ func (dec *Decoder) Decode() (interface{}, error) {
 	}
 	sizeMarkerSize := sizes[sizesIdx]
 
-	received, err = dec.r.Read(peek[sniffBufferSize : sniffBufferSize+sizeMarkerSize])
+	received, err = r.Read(peek[sniffBufferSize : sniffBufferSize+sizeMarkerSize])
 	if err != nil {
 		return nil, err
 	} else if received != sizeMarkerSize {
@@ -44,7 +36,7 @@ func (dec *Decoder) Decode() (interface{}, error) {
 	}
 
 	buffer := make([]uint8, pduSize)
-	received, err = dec.r.Read(buffer)
+	received, err = r.Read(buffer)
 	if err != nil {
 		return nil, err
 	} else if received != int(pduSize) {
