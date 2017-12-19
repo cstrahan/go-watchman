@@ -36,11 +36,9 @@ func Decode(r io.Reader) (interface{}, error) {
 	}
 
 	buffer := make([]uint8, int(pduSize))
-	received, err = r.Read(buffer)
+	received, err = io.ReadFull(r, buffer)
 	if err != nil {
 		return nil, err
-	} else if received != int(pduSize) {
-		return nil, errors.New("failed to load PDU")
 	}
 
 	val, _, err := decodeInterface(buffer)
