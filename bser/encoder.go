@@ -8,6 +8,9 @@ import (
 func Encode(o interface{}) ([]uint8, error) {
 	buffer := []uint8{0, 1, int64Marker, 0, 0, 0, 0, 0, 0, 0, 0}
 	buffer, err := encodeInterface(o, buffer)
+	if err != nil {
+		return nil, err
+	}
 	pduSize := int64(len(buffer)) - 11 // header
 	*(*int64)(unsafe.Pointer(&buffer[3])) = pduSize
 
