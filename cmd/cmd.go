@@ -33,6 +33,11 @@ func Command(watchmanPath string, cmd interface{}) (interface{}, error) {
 		return nil, err
 	}
 
+	err = getError(val)
+	if err != nil {
+		return nil, err
+	}
+
 	return val, nil
 }
 
